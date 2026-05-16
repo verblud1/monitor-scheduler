@@ -1,0 +1,88 @@
+import subprocess
+import requests
+import sys
+import html
+
+# --- НАСТРОЙКИ ---
+TOKEN = "TELEGRAM TOKEN"
+CHAT_ID = "CHAT ID"
+# Путь к интерпретатору и целевому скрипту
+TARGET_SCRIPT = ["/root/Xiaomi-Unlock-Ultra/.venv/bin/python3", 
+                 "/root/Xiaomi-Unlock-Ultra/Xiaomi_Unlock.py"]
+# -----------------
+
+def send_telegram_safe(status, raw_output):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    
+    # Оставляем запас на теги и статус-сообщение
+    max_log_len = 3500 
+    if len(raw_output) > max_log_len:
+        raw_output = raw_output[-max_log_len:] + "\n\n[ВЫВОД ОБРЕЗАН ПОД ЛИМИТ ТЕЛЕГРАМА]"
+    
+    # Экранируем спецсимволы для HTML
+    escaped_output = html.escape(raw_output) if raw_output.strip() else "[Консоль пуста]"
+    
+    # Формируем красивый HTML-отчет
+    html_report = (
+        f"<b>Родительский статус:</b> {status}\n"
+        f"<b>Вывод консоли:</b>\n"
+        f"<pre><code>{escaped_output}</code></pre>"
+    )
+    
+    # Попытка №1: Отправка с красивым HTML оформлением
+    payload = {
+        "chat_id": str(CHAT_ID).strip(),
+        "text": html_report,
+        "parse_mode": "HTML"
+    }
+    
+    response = requests.post(url, json=payload)
+    
+    # Если HTML по какой-то причине не прошел (ошибка 400)
+    if response.status_code == 400:
+        print("Предупреждение: HTML-разметка отклонена Telegram. Отправка в сыром виде...", file=sys.stderr)
+        
+        # Попытка №2: Отправка без какой-либо разметки (чистый текст)
+        plain_report = (
+            f"Родительский статус: {status}\n"
+            f"Вывод консоли (Сырой лог):\n\n"
+            f"{raw_output}"
+        )
+        payload["text"] = plain_report
+        payload.pop("parse_mode", None) # Удаляем упоминание HTML
+        
+        response = requests.post(url, json=payload)
+        
+    try:
+        response.raise_for_status()
+        print("Сообщение успешно отправлено в Telegram.")
+    except Exception as e:
+       
+        print(f"Критическая ошибка отправки: {e}", file=sys.stderr)
+        print(f"Ответ сервера Telegram: {response.text}", file=sys.stderr)
+
+
+def run_and_monitor():
+    try:
+        result = subprocess.run(
+            TARGET_SCRIPT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False
+        )
+        
+        status = "✅ Успешно" if result.returncode == 0 else f"❌ Ошибка (Код: {result.returncode})"
+        send_telegram_safe(status, result.stdout)
+
+    except FileNotFoundError:
+        send_telegram_safe("❌ Ошибка", "Указанный целевой скрипт не найден по заданному пути.")
+    except Exception as e:
+        send_telegram_safe("❌ Ошибка планировщика", f"Непредвиденное исключение: {e}")
+
+if __name__ == "__main__":
+    run_and_monitor()
+
+
+
+   
