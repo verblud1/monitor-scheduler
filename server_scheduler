@@ -80,9 +80,20 @@ def run_and_monitor():
     except Exception as e:
         send_telegram_safe("❌ Ошибка планировщика", f"Непредвиденное исключение: {e}")
 
+# Вариант А: Для Cron (Стандартный запуск)
 if __name__ == "__main__":
     run_and_monitor()
 
-
+# Вариант Б: Для непрерывного процесса в Screen (Раскомментируйте при необходимости)
+# if __name__ == "__main__":
+#     # Пример: запускать каждый день в 12:00
+#     schedule.every().day.at("12:00").do(run_and_monitor)
+#     # Или пример каждые 30 минут:
+#     # schedule.every(30).minutes.do(run_and_monitor)
+#
+#     print("Планировщик запущен и ожидает задач...")
+#     while True:
+#         schedule.run_pending()
+#         time.sleep(1)
 
    
